@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
 
+from typing import Dict
+
 import requests
-
-from datetime import timedelta
-from typing import Dict, List, Optional
-
 from django.db import models
-from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
 from tgbot import utils
 
@@ -14,16 +11,18 @@ from tgbot import utils
 class Config(models.Model):
     """Модель настроек бота."""
 
-    param_name = models.CharField(_('Наименование параметра'), max_length=255)
-    param_val = models.TextField(_('Значение параметра'), null=True, blank=True)
+    param_name = models.CharField(_("Наименование параметра"), max_length=255)
+    param_val = models.TextField(
+        _("Значение параметра"), null=True, blank=True
+    )
 
     def __str__(self):
         return self.param_name
 
     class Meta:
-        ordering = ['param_name']
-        verbose_name = 'Параметр бота'
-        verbose_name_plural = 'Параметры бота'
+        ordering = ["param_name"]
+        verbose_name = "Параметр бота"
+        verbose_name_plural = "Параметры бота"
 
     @classmethod
     def load_config(cls) -> Dict[str, str]:
@@ -40,7 +39,9 @@ class User(models.Model):
     username = models.CharField(max_length=32, null=True, blank=True)
     first_name = models.CharField(max_length=256)
     last_name = models.CharField(max_length=256, null=True, blank=True)
-    language_code = models.CharField(max_length=8, null=True, blank=True, help_text="Telegram client's lang")
+    language_code = models.CharField(
+        max_length=8, null=True, blank=True, help_text="Telegram client's lang"
+    )
     deep_link = models.CharField(max_length=64, null=True, blank=True)
 
     is_blocked_bot = models.BooleanField(default=False)
@@ -51,20 +52,32 @@ class User(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     def __str__(self):
-        return f'@{self.username}' if self.username is not None else f'{self.user_id}'
+        return (
+            f"@{self.username}"
+            if self.username is not None
+            else f"{self.user_id}"
+        )
 
     @classmethod
     def get_user_and_created(cls, update, context):
-        """ python-telegram-bot's Update, Context --> User instance """
+        """python-telegram-bot's Update, Context --> User instance"""
         data = utils.extract_user_data_from_update(update)
-        u, created = cls.objects.update_or_create(user_id=data["user_id"], defaults=data)
+        u, created = cls.objects.update_or_create(
+            user_id=data["user_id"], defaults=data
+        )
 
         if created:
-            if context is not None and context.args is not None and len(context.args) > 0:
+            if (
+                context is not None
+                and context.args is not None
+                and len(context.args) > 0
+            ):
                 payload = context.args[0]
-                if str(payload).strip() != str(data["user_id"]).strip():  # you can't invite yourself
+                if (
+                    str(payload).strip() != str(data["user_id"]).strip()
+                ):  # you can't invite yourself
                     u.deep_link = payload
                     u.save()
 
@@ -77,18 +90,20 @@ class User(models.Model):
 
     @classmethod
     def get_user_by_username_or_user_id(cls, string):
-        """ Search user in DB, return User or None if not found """
+        """Search user in DB, return User or None if not found"""
         username = str(string).replace("@", "").strip().lower()
         if username.isdigit():  # user_id
             return cls.objects.filter(user_id=int(username)).first()
         return cls.objects.filter(username__iexact=username).first()
 
-    def invited_users(self):  # --> User queryset 
-        return User.objects.filter(deep_link=str(self.user_id), created_at__gt=self.created_at)
+    def invited_users(self):  # --> User queryset
+        return User.objects.filter(
+            deep_link=str(self.user_id), created_at__gt=self.created_at
+        )
 
     class Meta:
-        verbose_name = 'Пользователь'
-        verbose_name_plural = 'Пользователи'
+        verbose_name = "Пользователь"
+        verbose_name_plural = "Пользователи"
 
 
 class Location(models.Model):
@@ -98,17 +113,27 @@ class Location(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"user: {self.user}, created at {self.created_at.strftime('(%H:%M, %d %B %Y)')}"
+        return (
+            f"user: {self.user}, created at "
+            + "{self.created_at.strftime('(%H:%M, %d %B %Y)')}"
+        )
 
     def save(self, *args, **kwargs):
         super(Location, self).save(*args, **kwargs)
         # Parse location with arcgis
         from .tasks import save_data_from_arcgis
-        save_data_from_arcgis.delay(latitude=self.latitude, longitude=self.longitude, location_id=self.pk)
+
+        save_data_from_arcgis.delay(
+            latitude=self.latitude,
+            longitude=self.longitude,
+            location_id=self.pk,
+        )
 
 
 class Arcgis(models.Model):
-    location = models.OneToOneField(Location, on_delete=models.CASCADE, primary_key=True)
+    location = models.OneToOneField(
+        Location, on_delete=models.CASCADE, primary_key=True
+    )
 
     match_addr = models.CharField(max_length=200)
     long_label = models.CharField(max_length=200)
@@ -141,7 +166,10 @@ class Arcgis(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.location}, city: {self.city}, country_code: {self.country_code}"
+        return (
+            f"{self.location}, city: {self.city}, "
+            + "country_code: {self.country_code}"
+        )
 
     @classmethod
     def from_json(cls, j, location_id):
@@ -173,25 +201,28 @@ class Arcgis(models.Model):
             "postal_ext": a.get("PostalExt"),
             "country_code": a.get("CountryCode"),
             "lng": l.get("x"),
-            "lat": l.get("y")
+            "lat": l.get("y"),
         }
 
-        arc, _ = cls.objects.update_or_create(location_id=location_id, defaults=arcgis_data)
+        arc, _ = cls.objects.update_or_create(
+            location_id=location_id, defaults=arcgis_data
+        )
         return
 
     @staticmethod
     def reverse_geocode(lat, lng):
         r = requests.post(
-            "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode",
+            "https://geocode.arcgis.com/arcgis/rest/"
+            + "services/World/GeocodeServer/reverseGeocode",
             params={
-                'f': 'json',
-                'location': f'{lng}, {lat}',
-                'distance': 50000,
-                'outSR': '',
+                "f": "json",
+                "location": f"{lng}, {lat}",
+                "distance": 50000,
+                "outSR": "",
             },
             headers={
-                'Content-Type': 'application/json',
-            }
+                "Content-Type": "application/json",
+            },
         )
         return r.json()
 
@@ -203,4 +234,150 @@ class UserActionLog(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"user: {self.user}, made: {self.action}, created at {self.created_at.strftime('(%H:%M, %d %B %Y)')}"
+        return (
+            f"user: {self.user}, made: {self.action}, "
+            + "created at {self.created_at.strftime('(%H:%M, %d %B %Y)')}"
+        )
+
+
+class Department(models.Model):
+    """Модель Департаментов."""
+
+    name = models.CharField(verbose_name="Название", max_length=200)
+
+    class Meta:
+        verbose_name = "Департамент"
+        verbose_name_plural = "Департаменты"
+
+    def __str__(self):
+        """Unicode representation of Product."""
+        return f"{self.name}"
+
+
+class Category(models.Model):
+    """Модель Категорий."""
+
+    departments = models.ManyToManyField(Department)
+    name = models.CharField(verbose_name="Название", max_length=200)
+
+    class Meta:
+        verbose_name = "Категория"
+        verbose_name_plural = "Категории"
+        ordering = ["-pk"]
+
+    def __str__(self):
+        return f"{self.name}"
+
+
+class PaymentMethod(models.Model):
+    name = models.CharField(verbose_name="Название", max_length=200)
+
+    class Meta:
+        verbose_name = "Способ оплаты"
+        verbose_name_plural = "Способы оплаты"
+        ordering = ["-pk"]
+
+    def __str__(self):
+        return f"{self.name}"
+
+
+class MoneySource(models.Model):
+    name = models.CharField(verbose_name="Название", max_length=200)
+
+    class Meta:
+        verbose_name = "Источник дохода"
+        verbose_name_plural = "Источники дохода"
+        ordering = ["-pk"]
+
+    def __str__(self):
+        return f"{self.name}"
+
+
+class Project(models.Model):
+    name = models.CharField(verbose_name="Название", max_length=200)
+
+    class Meta:
+        verbose_name = "Проект"
+        verbose_name_plural = "Проекты"
+        ordering = ["-pk"]
+
+    def __str__(self):
+        return f"{self.name}"
+
+
+class OperationsBase(models.Model):
+    date = models.DateTimeField(_("Дата и время"), auto_now_add=True)
+    project = models.ForeignKey(
+        Project, verbose_name=_("Проект"), on_delete=models.CASCADE
+    )
+    amount = models.IntegerField(_("Сумма"), blank=True, null=True)
+    user = models.ForeignKey(
+        User, related_name="consumptions", on_delete=models.CASCADE
+    )
+
+    class Meta:
+        verbose_name = "Операция"
+        verbose_name_plural = "Операции"
+        ordering = ["-pk"]
+
+    def __str__(self):
+        return f"{self.date}"
+
+
+# class Remainder(models.Model):
+#     amount = models.FloatField(_("Сумма"))
+
+#     class Meta:
+#         verbose_name = "Остаток"
+#         verbose_name_plural = "Остаток"
+#         ordering = ["-pk"]
+
+#     def __str__(self):
+#         return f"{self.date}"
+
+
+class Expenses(OperationsBase):
+    payment_method = models.ForeignKey(
+        PaymentMethod,
+        verbose_name=_("Способ Оплаты"),
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+    )
+    department = models.ForeignKey(
+        Department, verbose_name=_("Департамент"), on_delete=models.CASCADE
+    )
+    category = models.ForeignKey(
+        Category,
+        verbose_name="Категория",
+        on_delete=models.CASCADE,
+        related_name="consumptions",
+    )
+    comment = models.TextField(_("Комментарий"), blank=True, null=True)
+
+    class Meta:
+        verbose_name = "Расход"
+        verbose_name_plural = "Расходы"
+        ordering = ["-pk"]
+
+    def __str__(self):
+        return f"{self.project}"
+
+
+class Income(OperationsBase):
+    money_source = models.ForeignKey(
+        MoneySource,
+        verbose_name=_("Источник дохода"),
+        on_delete=models.CASCADE,
+        related_name="income",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        verbose_name = "Доход"
+        verbose_name_plural = "Доходы"
+        ordering = ["-pk"]
+
+    def __str__(self):
+        return f"{self.amount}"

@@ -18,11 +18,11 @@ services:
   web:
     build: .
     container_name: django_poetry
-    command: bash -c "python manage.py runserver 0.0.0.0:8001"
+    command: bash -c "python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/code
     ports:
-      - 8001:8000
+      - 8000:8000
     environment:
       - DJANGO_DEBUG='True'
     env_file:
@@ -30,7 +30,6 @@ services:
     depends_on:
       - db
       - redis
-    entrypoint: /entrypoint.sh
   bot:
     build: .
     container_name: tg_bot_poetry
